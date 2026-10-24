@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fire TV Launcher</title>
+<style>
+:root{--text:#f6f8fa;--ink:#151515;--yellow:#f5f871;--peri:#bec3f2;--paper:#f6f6f4;--muted:#8d8d8d;--glass:rgba(21,21,21,.4);--blur:24px;--dim-wall:.18;--dur:.42s;--ease:cubic-bezier(.34,1.6,.5,1);
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*{box-sizing:border-box;margin:0}
+html,body{height:100%}
+body{font-family:var(--app-font,Roboto,system-ui,-apple-system,'Segoe UI',sans-serif);color:var(--text);background:var(--ink);overflow:hidden}
+#wall{--scrim:linear-gradient(180deg,rgba(0,0,0,calc(var(--dim-wall) + .12)),rgba(0,0,0,var(--dim-wall)) 35%,rgba(0,0,0,calc(var(--dim-wall) + .22)));position:fixed;top:0;right:0;bottom:0;left:0;background:var(--scrim) center/cover no-repeat var(--ink)}
+#wall.empty{background-image:var(--scrim),radial-gradient(70vw 60vh at 70% 20%,#2b2f4a,transparent 70%),radial-gradient(60vw 50vh at 10% 90%,#2a2f1c,transparent 70%)}
+.clock{position:fixed;left:7.4vw;top:5.4vh;font-size:clamp(34px,3.4vw,66px);font-weight:300;letter-spacing:-.02em}
+.chips{position:fixed;left:7.4vw;top:15vh;display:flex}
+.chips>*+*{margin-left:.6vw}
+.chip{padding:.45em 1em;border-radius:99px;background:var(--paper);color:var(--ink);font-size:clamp(12px,1.15vw,22px);font-weight:500}
+.chip.peri{background:var(--peri)}
+.hero{position:fixed;left:7.4vw;top:24vh;max-width:62vw;font-size:clamp(34px,4.8vw,92px);font-weight:300;line-height:1.04;letter-spacing:-.03em;text-shadow:0 2px 24px rgba(0,0,0,.35)}
+.hero b{font-weight:600}
+.top{position:fixed;right:7.2vw;top:4.8vh;display:flex}
+.top>*+*{margin-left:.8vw}
+.ib{width:clamp(38px,3.4vw,66px);height:clamp(38px,3.4vw,66px);border-radius:50%;border:0;background:var(--ink);color:#fff;display:grid;place-items:center;cursor:pointer;outline:none;transition:transform var(--dur) var(--ease)}
+.ib svg{width:54%;height:54%;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.ib:focus{background:var(--yellow);color:var(--ink);transform:scale(1.12)}
+/* Cards: the focused card is the expanded one, the rest stay collapsed.
+   The layout switches instantly and the motion is a transform-only (FLIP) animation driven from
+   settle() below, so the GPU does the work and nothing is re-laid-out frame by frame. */
+.dock{position:fixed;left:0;right:0;bottom:8vh;height:30vh;padding:0 5.2vw;display:flex;align-items:stretch;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
+.dock::-webkit-scrollbar{display:none}
+.app+.app{margin-left:1vw}
+.app{will-change:transform;min-width:0;isolation:isolate;--cut:#2b3236;--e:clamp(12px,1.15vw,22px);--eh:calc(var(--e)*1.35);flex:0 0 12.5vw;position:relative;display:flex;flex-direction:column;justify-content:space-between;padding:2.6vh 1.2vw;cursor:pointer;outline:none;color:var(--text)}
+.app:focus{--cut:var(--c);flex-basis:31vw;color:var(--k)}
+.bg{position:absolute;top:0;right:0;bottom:0;left:0;z-index:-1;border-radius:clamp(22px,2vw,40px);background:var(--glass);transform-origin:0 50%;will-change:transform}
+.bg::before{content:"";position:absolute;top:0;right:0;bottom:0;left:0;border-radius:inherit;opacity:0;transition:opacity .3s;background:linear-gradient(135deg,rgba(255,255,255,.2),rgba(255,255,255,0) 45%),linear-gradient(160deg,var(--c),var(--d,var(--c)))}
+.app:focus .bg::before{opacity:1}
+.ic{display:block;width:clamp(40px,4.2vw,80px);height:clamp(40px,4.2vw,80px);transform-origin:0 0;transition:transform var(--dur) var(--ease)}
+.app:focus .ic{transform:scale(1.15)}
+.ic img{width:100%;height:100%;object-fit:contain}
+.app .ic img{padding:10%;border-radius:22%;background:var(--c)}
+.tile .ic{width:7vh;height:7vh}
+.tile .bn{position:absolute;left:0;top:0;width:100%;height:100%;object-fit:cover;border-radius:inherit}
+.ic svg{width:100%;height:100%;fill:currentColor}
+/* The name is always laid out at the big size and scaled down when collapsed, so it can spring instead of snapping */
+.nm{width:156%;min-width:0;transform-origin:0 100%;transform:translateY(calc(var(--eh)*.64)) scale(.64);transition:transform var(--dur) var(--ease)}
+.app:focus .nm{width:100%;transform:none}
+.nm span{display:block;font-size:clamp(20px,2.5vw,48px);font-weight:500;line-height:1.25;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.app:focus .nm span{font-weight:400}
+.nm em{display:block;font-style:normal;font-size:var(--e);line-height:var(--eh);height:var(--eh);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:0;transition:opacity .15s}
+.app:focus .nm em{opacity:.75;transition:opacity .25s .1s}
+.go{position:absolute;right:1.2vw;bottom:2.6vh;width:clamp(38px,3.4vw,64px);height:clamp(38px,3.4vw,64px);border-radius:50%;background:var(--k);color:var(--c);display:grid;place-items:center;opacity:0;transform:scale(.4);transition:opacity .08s,transform .15s ease-in}
+.go svg{width:50%;height:50%;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.app:focus .go{opacity:1;transform:none;transition:opacity .2s .16s,transform var(--dur) var(--ease) .16s}
+.mode-icons .app:not(:focus) .nm span{display:none}
+.mode-names .ic{display:none}
+:root[data-theme="light"] .app:not(:focus){--cut:#d9d9d6;color:var(--ink)}
+:root[data-theme="light"] .app:not(:focus) .bg{background:rgba(246,246,244,.62)}
+.panel{position:fixed;right:7.2vw;top:calc(4.8vh + clamp(38px,3.4vw,66px) + 1.4vh);width:clamp(280px,29vw,560px);padding:.6vw;border-radius:clamp(22px,2vw,40px);background:var(--paper);color:var(--ink);
+  opacity:0;transform:translateY(-8px);pointer-events:none;transition:opacity .2s,transform .25s}
+.panel.open{opacity:1;transform:none;pointer-events:auto}
+.row{display:flex;justify-content:space-between;align-items:center;width:100%;padding:1.4vh 1.2vw;border:0;border-radius:99px;background:transparent;color:var(--ink);font:inherit;font-size:clamp(13px,1.35vw,26px);outline:none;cursor:pointer;transition:background .2s}
+.row b{font-weight:400;color:var(--muted)}
+.row:focus{background:var(--yellow)}
+.row:focus b{color:rgba(21,21,21,.65)}
+.font-manager{position:fixed;inset:0;z-index:8;display:none;align-items:center;justify-content:center;padding:5vh 6vw;background:rgba(10,12,16,.88);overflow-y:auto}
+.font-manager.open{display:flex}
+.font-dialog{width:min(760px,88vw);max-height:90vh;overflow-y:auto;padding:clamp(18px,2.2vw,36px);border-radius:clamp(20px,2vw,36px);background:var(--paper);color:var(--ink)}
+.font-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5vh}
+.font-head h2{font-size:clamp(26px,3vw,48px);font-weight:400}
+.font-close,.font-action,.font-choice,.font-remove{border:0;font:inherit;cursor:pointer}
+.font-close{width:clamp(38px,3.4vw,56px);height:clamp(38px,3.4vw,56px);border-radius:50%;background:#e4e4e0;color:var(--ink);font-size:1.4em}
+.font-intro,.font-note{font-size:clamp(13px,1.2vw,18px);line-height:1.45;color:#555;margin-bottom:1.4vh}
+.font-list{display:grid;gap:.8vh;margin:1.8vh 0}
+.font-entry{display:flex;align-items:center;gap:1vw}
+.font-choice{flex:1;min-width:0;padding:1.2vh 1vw;border-radius:14px;background:#e8e8e4;color:var(--ink);text-align:left}
+.font-choice[aria-pressed="true"]{background:#e4e3b3;outline:2px solid #777722}
+.font-choice small{display:block;margin-top:.25em;color:#686860}
+.font-remove{padding:1vh 1vw;border-radius:12px;background:#deded9;color:#5a2525}
+.font-actions{display:grid;grid-template-columns:1fr;gap:.9vh;margin-top:2vh}
+.font-action{padding:1.2vh 1.2vw;border-radius:14px;background:var(--ink);color:#fff;text-align:center}
+.font-download{display:flex;gap:.6vw}
+.font-download input{flex:1;min-width:0;padding:1vh 1vw;border:1px solid #aaa;border-radius:12px;background:#fff;color:var(--ink);font:inherit}
+.font-manager button:focus,.font-download input:focus{outline:3px solid #9b9b35;outline-offset:2px}
+.font-note{margin:1.2vh 0 0}
+.toast{z-index:9;position:fixed;left:50%;bottom:3vh;transform:translate(-50%,16px);opacity:0;padding:.8em 1.4em;border-radius:99px;background:var(--ink);color:var(--yellow);transition:opacity .3s,transform .3s;pointer-events:none;font-size:clamp(13px,1.3vw,22px)}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+.drawer{position:fixed;top:0;right:0;bottom:0;left:0;z-index:5;padding:8vh 6vw 8vh;background:rgba(21,21,21,.88);opacity:0;pointer-events:none;transition:opacity .3s;overflow-y:auto;scrollbar-width:none}
+.drawer.open{opacity:1;pointer-events:auto}
+.dh{display:flex;align-items:center;margin:0 1.2vw 7vh}
+.dh>*+*{margin-left:1vw}
+.dh h2{font-size:clamp(28px,3.4vw,64px);font-weight:300;letter-spacing:-.03em}
+.grid{--g:1.6vw;--p:1.2vw;--th:12vh;--cols:5;position:relative;display:grid;grid-template-columns:repeat(5,1fr);grid-auto-rows:var(--th);gap:6vh var(--g);padding:0 var(--p)}
+.pill{position:absolute;left:0;top:-2.2vh;height:calc(var(--th) + 4.4vh);width:calc(var(--hn)/var(--cols)*(100% - 2*var(--p) - (var(--cols) - 1)*var(--g)) + (var(--hn) - 1)*var(--g) + 2*var(--p));border-radius:clamp(24px,2.4vw,46px);background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.2)}
+.pick .pill{display:none}
+.tile{--cut:var(--c);position:relative;z-index:1;display:grid;place-items:center;border-radius:clamp(14px,1.4vw,26px);background:linear-gradient(135deg,rgba(255,255,255,.2),rgba(255,255,255,0) 45%),linear-gradient(160deg,var(--c),var(--d,var(--c)));color:var(--k);outline:none;cursor:pointer;transition:transform var(--dur) var(--ease)}
+.tile:focus{transform:scale(1.14);z-index:2;box-shadow:0 1.2vh 2.4vh rgba(0,0,0,.35)}
+.tile .lb{position:absolute;top:calc(100% + 1.2vh);left:0;width:100%;padding:0 .3vw;font-size:clamp(13px,1.3vw,24px);line-height:1.15;color:#fff;text-align:center;overflow-wrap:anywhere;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;opacity:0;transition:opacity .2s}
+.tile:focus .lb{opacity:1}
+.chk{position:absolute;top:-1vh;right:-.6vw;width:clamp(24px,2.2vw,42px);height:clamp(24px,2.2vw,42px);border-radius:50%;background:var(--yellow);color:var(--ink);font-weight:700;display:none;place-items:center}
+.pick .tile.on .chk{display:grid}
+.pick .tile:not(.on){opacity:.5}
+#file{display:none}
+:root[data-motion="1"]{--dur:.2s;--ease:cubic-bezier(.2,.8,.3,1)}
+:root[data-device="fire-tv"][data-motion="0"]{--dur:.3s;--ease:cubic-bezier(.2,1.12,.3,1)}
+:root[data-motion="2"] *{transition:none!important}
+:root[data-motion="2"] .app,:root[data-motion="2"] .bg{will-change:auto}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div id="wall" class="empty"></div>
+<div class="clock" id="clock"></div>
+<div class="chips"><span class="chip" id="date"></span><span class="chip peri" id="count"></span></div>
+<h1 class="hero" id="hero"></h1>
+<div class="top" id="top" data-zone="top">
+  <button class="ib" id="bWall" aria-label="Choose wallpaper"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="M4 18l5-5 4 4 3-3 4 4"/></svg></button>
+  <button class="ib" id="bGrid" aria-label="Change layout"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.6"/></svg></button>
+  <button class="ib" id="bSet" aria-label="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><circle cx="12" cy="12" r="7.6" stroke-dasharray="3.4 2.6"/></svg></button>
+</div>
+<div class="panel" id="panel" data-zone="panel" role="menu">
+  <button class="row" data-k="home">Home apps<b></b></button>
+  <button class="row" data-k="wall">Wallpaper<b></b></button>
+  <button class="row" data-k="dim">Wallpaper dimming<b></b></button>
+  <button class="row" data-k="labels">Labels<b></b></button>
+  <button class="row" data-k="glass">Glass<b></b></button>
+  <button class="row" data-k="fonts">Fonts<b></b></button>
+  <button class="row" data-k="motion">Motion<b></b></button>
+  <button class="row" data-k="clock">Clock<b></b></button>
+</div>
+<nav class="dock" id="dock" data-zone="dock" aria-label="Apps"></nav>
+<input type="file" id="file" accept="image/*">
+<div class="drawer" id="drawer" data-zone="drawer" role="dialog" aria-label="Apps"><div class="dh"><h2 id="dt"></h2><span class="chip peri" id="dc"></span></div><div class="grid" id="grid"></div></div>
+<div class="font-manager" id="fontManager" role="dialog" aria-modal="true" aria-label="Font manager">
+  <section class="font-dialog">
+    <header class="font-head"><h2>Fonts</h2><button class="font-close" id="fontClose" aria-label="Close font manager">×</button></header>
+    <p class="font-intro">Choose the launcher font, add a font file from device storage, or download a direct font-file URL. Fonts stay in this app.</p>
+    <div class="font-list" id="fontList"></div>
+    <div class="font-actions">
+      <button class="font-action" id="fontImport">Add font file</button>
+      <div class="font-download"><input id="fontUrl" type="url" inputmode="url" placeholder="https://example.com/font.woff2" aria-label="Direct font file URL"><button class="font-action" id="fontDownload">Download</button></div>
+    </div>
+    <p class="font-note" id="fontNote">Supported formats: TTF, OTF, WOFF, and WOFF2. Maximum file size: 12 MB. Use a direct link to the font file.</p>
+  </section>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function () { if (window.CSS && CSS.supports && CSS.supports('width', 'clamp(1px,2vw,3px)')) return;
+  const W = innerWidth, px = v => { v = v.trim(); return v.slice(-2) === 'vw' ? parseFloat(v) * W / 100 : parseFloat(v); }, st = document.querySelector('style');
+  st.textContent = st.textContent.replace(/clamp\(([^,()]+),([^,()]+),([^,()]+)\)/g, (m, a, b, c) => Math.min(Math.max(px(b), px(a)), px(c)).toFixed(1) + 'px'); })();
+/* ===== EDIT HERE — the page reads everything from this block ===== */
+const I = {
+  stremio:'<svg viewBox="0 0 48 48"><path d="M24 3 45 24 24 45 3 24Z"/><path d="M20 16l13 8-13 8Z" style="fill:var(--cut)"/></svg>',
+  netflix:'<svg viewBox="0 0 48 48"><rect x="12" y="4" width="7" height="40"/><rect x="29" y="4" width="7" height="40"/><path d="M12 4h7l17 40h-7Z"/></svg>',
+  disney:'<svg viewBox="0 0 48 48"><text x="24" y="34" text-anchor="middle" font-size="30" font-family="Georgia,serif" font-style="italic">D+</text></svg>',
+  youtube:'<svg viewBox="0 0 48 48"><rect x="4" y="10" width="40" height="28" rx="9"/><path d="M20 17l11 7-11 7Z" style="fill:var(--cut)"/></svg>',
+  prime:'<svg viewBox="0 0 48 48"><path d="M5 26Q24 40 41 25" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M36 21l7 3-3 6Z"/></svg>',
+  hotstar:'<svg viewBox="0 0 48 48"><path d="M24 4l5.5 14.5L45 19 33 29l4 15-13-8.5L11 44l4-15L3 19l15.5-.5Z"/></svg>',
+  spotify:'<svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="20"/><path d="M13 19Q25 15 36 21M15 26Q25 23 33 28M17 33Q25 30 30 34" style="stroke:var(--cut)" stroke-width="3" fill="none" stroke-linecap="round"/></svg>',
+  kodi:'<svg viewBox="0 0 48 48"><path d="M24 2 36 14v20L24 46 12 34V14Z"/><path d="M24 13l7 7v8l-7 7-7-7v-8Z" style="fill:var(--cut)"/></svg>'
+};
+I.plex='<svg viewBox="0 0 48 48"><path d="M14 4h11l11 20-11 20H14l11-20Z"/></svg>';
+I.music='<svg viewBox="0 0 48 48"><path d="M18 8l22-4v28a7 7 0 1 1-4-6V14l-14 3v21a7 7 0 1 1-4-6Z"/></svg>';
+I.pods='<svg viewBox="0 0 48 48"><circle cx="24" cy="20" r="6"/><path d="M12 20a12 12 0 0 1 24 0M8 20a16 16 0 0 1 32 0" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/><rect x="21" y="28" width="6" height="14" rx="3"/></svg>';
+I.photos='<svg viewBox="0 0 48 48" fill-opacity=".72"><circle cx="24" cy="14" r="8"/><circle cx="34" cy="24" r="8"/><circle cx="24" cy="34" r="8"/><circle cx="14" cy="24" r="8"/></svg>';
+I.app='<svg viewBox="0 0 48 48"><rect x="7" y="7" width="34" height="34" rx="9"/><path d="M17 24h14M24 17v14" fill="none" stroke="var(--cut)" stroke-width="3" stroke-linecap="round"/></svg>';
+const CONFIG = {
+  hour12: true,
+  apps: [
+    { name:'Stremio', pkg:'com.stremio.one', icon:I.stremio, tag:'Movies and series', color:'#7B5BF5', ink:'#fff' },
+    { name:'Netflix', pkg:'com.netflix.ninja', icon:I.netflix, tag:'Series and films', color:'#E50914', ink:'#fff' },
+    { name:'Disney+', pkg:'com.disney.disneyplus', icon:I.disney, tag:'Films and shows', color:'#113CCF', ink:'#fff' },
+    { name:'YouTube', pkg:'com.amazon.firetv.youtube', pkgs:['com.amazon.firetv.youtube','com.google.android.youtube.tv'], icon:I.youtube, tag:'Videos and live', color:'#FF0000', ink:'#fff' },
+    { name:'Prime Video', pkg:'com.amazon.avod', pkgs:['com.amazon.avod','com.amazon.firebat','com.amazon.avod.thirdpartyclient'], icon:I.prime, tag:'Included with Prime', color:'#00A8E1', ink:'#fff' },
+    { name:'Hotstar', pkg:'in.startv.hotstar', icon:I.hotstar, tag:'Cricket and shows', color:'#1F3FD0', ink:'#fff' },
+    { name:'Spotify', pkg:'com.spotify.tv.android', icon:I.spotify, tag:'Music and podcasts', color:'#1DB954', ink:'#0a0a0a' },
+    { name:'Kodi', pkg:'org.xbmc.kodi', icon:I.kodi, tag:'Your media library', color:'#17B2E7', ink:'#06222d' },
+    { name:'Plex', pkg:'com.plexapp.android', icon:I.plex, tag:'Your own server', color:'#E5A00D', ink:'#1a1a1a' },
+    { name:'Music', pkg:'com.apple.android.music', icon:I.music, tag:'Songs and radio', color:'#FA243C', ink:'#fff' },
+    { name:'Podcasts', pkg:'com.google.android.apps.podcasts', icon:I.pods, tag:'Shows to follow', color:'#A24DE0', ink:'#fff' },
+    { name:'Photos', pkg:'com.google.android.apps.photos', icon:I.photos, tag:'Albums and memories', color:'#F6F6F4', ink:'#151515' }
+  ],
+  dim:   [['None',0],['Light',.18],['Strong',.38]],
+  blur:  [['Soft',10],['Medium',24],['Deep',42]],
+  glass: [['Clear',.3],['Balanced',.5],['Frosted',.68]],
+  motion: ['Bubbly','Quick','Off']
+};
+/* ================================================================= */
+
+const $ = id => document.getElementById(id), root = document.documentElement;
+const FIRE_TV = !!(window.Android && window.Android.isFireTv && window.Android.isFireTv());
+root.dataset.device = FIRE_TV ? 'fire-tv' : 'other';
+const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]));
+const dock = $('dock'), topBar = $('top'), panel = $('panel'), toast = $('toast'), wall = $('wall'), file = $('file');
+const S = { labels:0, blur:1, glass:1, dim:2, wall:0, hour12:CONFIG.hour12, motion:(navigator.hardwareConcurrency || 4) <= 2 ? 1 : 0, font:'system' };
+let tt, lastDock = 0, hasWall = false;
+try { Object.assign(S, JSON.parse(localStorage.getItem('fl-settings') || '{}')); } catch (e) {}
+/* Installed apps: on a real device Android.getApps() returns JSON [{name,pkg,color?,ink?}] */
+const known = a => CONFIG.apps.filter(c => (c.pkgs || [c.pkg]).indexOf(a.pkg) >= 0 || c.name.toLowerCase() === String(a.name).toLowerCase())[0];
+const INSTALLED = (() => { try { if (window.Android && window.Android.getApps) return JSON.parse(window.Android.getApps()).map(a => { const k = known(a); return Object.assign({ tag:'Open app' }, a, k ? { color:k.color, ink:k.ink, tag:k.tag } : {}); }); } catch (e) {} return CONFIG.apps; })();
+const fontManager = $('fontManager'), fontListEl = $('fontList');
+let fontList = (() => { try {
+  if (!window.Android || !window.Android.getFonts) return [];
+  return JSON.parse(window.Android.getFonts()).filter(f => /^[a-f0-9-]{36}$/.test(f.id) && ['ttf','otf','woff','woff2'].includes(f.format));
+} catch (e) { return []; } })();
+if (S.font !== 'system' && !fontList.some(f => f.id === S.font)) S.font = 'system';
+S.home = (Array.isArray(S.home) ? S.home : INSTALLED.filter(known).concat(INSTALLED.filter(a => !known(a))).slice(0, 6).map(a => a.name)).filter(n => INSTALLED.some(a => a.name === n)).slice(0, 7);
+const ALL = { name:'All apps', tag:'Everything installed', color:'#BEC3F2', ink:'#151515', icon:'<svg viewBox="0 0 48 48"><rect x="6" y="6" width="16" height="16" rx="4"/><rect x="26" y="6" width="16" height="16" rx="4"/><rect x="6" y="26" width="16" height="16" rx="4"/><rect x="26" y="26" width="16" height="16" rx="4"/></svg>' };
+const shadeOf = a => { if (a.shade) return a.shade; const h = a.color, c = [1, 3, 5].map(i => parseInt(h.substr(i, 2), 16)), f = (.299 * c[0] + .587 * c[1] + .114 * c[2]) / 255 > .8 ? .88 : .68; return '#' + c.map(v => Math.round(v * f).toString(16).padStart(2, '0')).join(''); };
+let cards = [];
+function renderDock() {
+  dock.innerHTML = ''; lay = null;
+  INSTALLED.filter(a => S.home.includes(a.name)).concat([ALL]).forEach(a => {
+    const el = document.createElement('div');
+    el.className = 'app'; el.tabIndex = 0; el.setAttribute('role', 'button');
+    el.style.setProperty('--c', a.color); el.style.setProperty('--k', a.ink); el.style.setProperty('--d', shadeOf(a));
+    const icon = a === ALL ? a.icon : (known(a) || {}).icon || I.app;
+    el.innerHTML = '<div class="bg"></div><i class="ic">' + icon + '</i><div class="nm"><span>' + esc(a.name) + '</span><em>' + esc(a.tag || 'Open app') + '</em></div><div class="go"><svg viewBox="0 0 24 24"><path d="M7 17 17 7M8 7h9v9"/></svg></div>';
+    el.addEventListener('click', () => a === ALL ? openDrawer('browse') : launch(a));
+    dock.appendChild(el);
+  });
+  cards = [].slice.call(dock.children);
+  tick();
+}
+const apps = () => cards;
+
+const zoneOf = el => { const z = el && el.closest && el.closest('[data-zone]'); return z ? z.dataset.zone : null; };
+/* ---- Motion -------------------------------------------------------------------------
+   Focus is the expanded state: the focused card grows, the others collapse. Layout jumps straight to the
+   final state, then each card is animated from where it VISUALLY was to where it now is, using only
+   transforms (translate for position, scaleX for width). Transforms run on the GPU compositor, so this
+   stays smooth on weak chips where animating width/flex-basis would stutter. Pressing keys quickly is
+   fine: a new move starts from wherever the cards currently are on screen. */
+const RM = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+const MODES = FIRE_TV
+  ? [[300, 'cubic-bezier(.2,1.12,.3,1)'], [200, 'cubic-bezier(.2,.8,.3,1)'], [0, 'linear']]
+  : [[420, 'cubic-bezier(.34,1.6,.5,1)'], [200, 'cubic-bezier(.2,.8,.3,1)'], [0, 'linear']];
+const CAN_ANIM = typeof Element !== 'undefined' && !!Element.prototype.animate;
+function mode() { return RM ? 2 : S.motion; }
+let lay = null, flight = [], lastSL = 0;
+/* current [translateX, scaleX] of an element, read from its computed matrix (works mid-animation) */
+function tf(el) {
+  const m = getComputedStyle(el).transform;
+  if (!m || m === 'none') return [0, 1];
+  const v = m.slice(m.indexOf('(') + 1, -1).split(',');
+  return m.charAt(6) === '3' ? [+v[12] || 0, +v[0] || 1] : [+v[4] || 0, +v[0] || 1];
+}
+function settle() {
+  const cs = cards, n = cs.length;
+  if (!n) return;
+  if (drawer.classList.contains('open')) { lay = null; return; }
+  const m = MODES[mode()], anim = CAN_ANIM && m[0] > 0;
+  /* 1. where every card is on screen right now (it may still be mid-animation) */
+  const was = anim && lay && lay.length === n ? cs.map(c => ({ x:tf(c)[0], s:tf(c.firstChild)[1] })) : null;
+  flight.forEach(a => a.cancel()); flight = [];
+  /* 2. keep the focused card on screen. The jump is instant; the animation below hides it */
+  const f = document.activeElement;
+  if (f && f.parentNode === dock) {
+    const pad = innerWidth * .052, L = f.offsetLeft, W = f.offsetWidth, cw = dock.clientWidth;
+    let sl = dock.scrollLeft;
+    if (L - pad < sl) sl = L - pad; else if (L + W + pad > sl + cw) sl = L + W + pad - cw;
+    if (Math.abs(sl - dock.scrollLeft) > .5) dock.scrollLeft = Math.max(0, sl);
+    lastSL = dock.scrollLeft;
+  }
+  if (!anim) { lay = null; return; }
+  /* 3. where every card is now, then play from "was" to "now" */
+  const now = cs.map(c => { const r = c.getBoundingClientRect(); return { l:r.left, w:r.width }; });
+  if (was) cs.forEach((c, i) => {
+    const dx = lay[i].l + was[i].x - now[i].l, sx = lay[i].w * was[i].s / now[i].w;
+    if (Math.abs(dx) < .5 && Math.abs(sx - 1) < .01) return;
+    const o = { duration:m[0], easing:m[1] };
+    flight.push(c.animate([{ transform:'translate3d(' + dx + 'px,0,0)' }, { transform:'translate3d(0,0,0)' }], o));
+    flight.push(c.firstChild.animate([{ transform:'scale3d(' + sx + ',1,1)' }, { transform:'scale3d(1,1,1)' }], o));
+  });
+  lay = now;
+}
+dock.addEventListener('scroll', () => { if (Math.abs(dock.scrollLeft - lastSL) > 1) { lay = null; lastSL = dock.scrollLeft; } }, { passive:true });
+addEventListener('resize', () => { lay = null; });
+document.addEventListener('focusin', e => {
+  const el = e.target.closest && e.target.closest('.app');
+  if (el && zoneOf(el) === 'dock') lastDock = cards.indexOf(el);
+  settle();
+});
+document.addEventListener('focusout', () => setTimeout(settle, 0));
+/* App drawer: browse all installed apps, or pick the 5 to 7 shown on home */
+const drawer = $('drawer'), grid = $('grid');
+let dMode = 'browse';
+function pickNote() { $('dc').textContent = dMode === 'pick' ? 'Pick up to 7 · ' + S.home.length + ' selected · Back to save' : INSTALLED.length + ' apps'; }
+function openDrawer(mode) {
+  dMode = mode; panel.classList.remove('open');
+  drawer.classList.toggle('pick', mode === 'pick');
+  $('dt').textContent = mode === 'pick' ? 'Choose home apps' : 'All apps';
+  const home = INSTALLED.filter(a => S.home.includes(a.name));
+  const list = mode === 'pick' ? INSTALLED : home.concat(INSTALLED.filter(a => !home.includes(a)));
+  grid.innerHTML = '<div class="pill"></div>';
+  list.forEach(a => {
+    const t = document.createElement('div');
+    t.className = 'tile' + (S.home.includes(a.name) ? ' on' : ''); t.tabIndex = 0; t.setAttribute('role', 'button');
+    t.style.setProperty('--c', a.color); t.style.setProperty('--k', a.ink); t.style.setProperty('--d', shadeOf(a));
+    t.innerHTML = '<i class="ic">' + a.icon + '</i><span class="lb">' + esc(a.name) + '</span><span class="chk">✓</span>';
+    t.onclick = () => {
+      if (dMode === 'browse') { closeDrawer(); return launch(a); }
+      const i = S.home.indexOf(a.name);
+      if (i >= 0) { S.home.splice(i, 1); }
+      else { if (S.home.length >= 7) return say('Home holds up to 7 apps'); S.home.push(a.name); }
+      t.classList.toggle('on'); pickNote();
+    };
+    grid.appendChild(t);
+  });
+  pickNote(); drawer.classList.add('open');
+  const cols = getComputedStyle(grid).gridTemplateColumns.split(' ').length;
+  grid.style.setProperty('--cols', cols); grid.style.setProperty('--hn', Math.min(cols, list.length)); drawer.scrollTop = 0;
+  grid.querySelector('.tile').focus({ preventScroll:true });
+}
+function closeDrawer() {
+  if (dMode === 'pick') { renderDock(); apply(); }
+  drawer.classList.remove('open');
+  (dMode === 'pick' ? $('bSet') : apps()[apps().length - 1]).focus({ preventScroll:true });
+}
+function drawerKeys(e) {
+  const t = [...grid.querySelectorAll('.tile')], cur = document.activeElement, i = t.indexOf(cur), k = e.key;
+  const cols = getComputedStyle(grid).gridTemplateColumns.split(' ').length;
+  const d = { ArrowRight:1, ArrowLeft:-1, ArrowDown:cols, ArrowUp:-cols }[k];
+  if (k === 'Escape' || k === 'Backspace') closeDrawer();
+  else if (i < 0) t[0].focus({ preventScroll:true });
+  else if (d && t[i + d]) { t[i + d].focus({ preventScroll:true }); t[i + d].scrollIntoView({ block:'nearest' }); }
+  else if (k === 'Enter') cur.click();
+  else return;
+  e.preventDefault();
+}
+/* Mouse hover moves the same single highlight; no second state */
+let mx = -1, my = -1, lastKey = 0;
+addEventListener('keydown', () => { lastKey = Date.now(); }, true);
+if (!window.Android) document.addEventListener('mousemove', e => {
+  if (mx < 0) { mx = e.clientX; my = e.clientY; return; }
+  if (Math.abs(e.clientX - mx) + Math.abs(e.clientY - my) < 8) return;
+  mx = e.clientX; my = e.clientY;
+  if (Date.now() - lastKey < 1500) return;
+  const t = e.target.closest('.app,.ib,.row,.tile');
+  if (t && document.activeElement !== t) t.focus({ preventScroll:true });
+});
+
+/* Settings and wallpaper */
+let fontReturn = null;
+const fontFormatNames = { ttf:'TrueType', otf:'OpenType', woff:'WOFF', woff2:'WOFF2' };
+function fontFamily(id) { return id === 'system' ? "Roboto,system-ui,-apple-system,'Segoe UI',sans-serif" : '"GlassFont_' + id.replace(/-/g, '') + '",Roboto,system-ui,sans-serif'; }
+function updateFontFaces() {
+  let style = $('customFontFaces');
+  if (!style) { style = document.createElement('style'); style.id = 'customFontFaces'; document.head.appendChild(style); }
+  const formats = { ttf:'truetype', otf:'opentype', woff:'woff', woff2:'woff2' };
+  style.textContent = fontList.map(f => '@font-face{font-family:"GlassFont_' + f.id.replace(/-/g, '') + '";src:url("http://launcher.local/font/' + f.id + '") format("' + formats[f.format] + '");font-display:swap}').join('\n');
+  root.style.setProperty('--app-font', fontFamily(S.font));
+}
+function renderFontList() {
+  const entries = [{ id:'system', name:'System default', format:'system' }].concat(fontList);
+  fontListEl.innerHTML = entries.map(f => '<div class="font-entry"><button class="font-choice" data-font-id="' + f.id + '" aria-pressed="' + (S.font === f.id) + '">'
+    + esc(f.name) + '<small>' + (f.id === 'system' ? 'Built-in sans-serif' : fontFormatNames[f.format]) + '</small></button>'
+    + (f.id === 'system' ? '' : '<button class="font-remove" data-remove-font="' + f.id + '">Remove</button>') + '</div>').join('');
+  fontListEl.querySelectorAll('[data-font-id]').forEach(button => button.onclick = () => {
+    S.font = button.dataset.fontId; updateFontFaces(); apply(); renderFontList();
+  });
+  fontListEl.querySelectorAll('[data-remove-font]').forEach(button => button.onclick = () => {
+    const id = button.dataset.removeFont, found = fontList.find(f => f.id === id);
+    if (found && window.Android && window.Android.removeFont) {
+      if (S.font === id) { S.font = 'system'; updateFontFaces(); apply(); }
+      window.Android.removeFont(id);
+    }
+  });
+}
+function openFontManager() {
+  fontReturn = document.activeElement;
+  panel.classList.remove('open');
+  updateFontFaces(); renderFontList();
+  const available = !!(window.Android && window.Android.getFonts);
+  $('fontImport').disabled = !available;
+  $('fontDownload').disabled = !available;
+  $('fontUrl').disabled = !available;
+  $('fontNote').textContent = available
+    ? 'Supported formats: TTF, OTF, WOFF, and WOFF2. Maximum file size: 12 MB. Use a direct link to the font file.'
+    : 'Font installation is available in the installed Android app. This browser preview can show the system font only.';
+  fontManager.classList.add('open');
+  $('fontClose').focus({ preventScroll:true });
+}
+function closeFontManager() {
+  fontManager.classList.remove('open');
+  panel.classList.add('open');
+  if (fontReturn && fontReturn.isConnected) fontReturn.focus({ preventScroll:true });
+  else $('bSet').focus({ preventScroll:true });
+}
+function refreshFonts() {
+  if (!window.Android || !window.Android.getFonts) return;
+  try {
+    fontList = JSON.parse(window.Android.getFonts()).filter(f => /^[a-f0-9-]{36}$/.test(f.id) && ['ttf','otf','woff','woff2'].includes(f.format));
+  } catch (e) { say('Could not refresh installed fonts'); return; }
+  if (S.font !== 'system' && !fontList.some(f => f.id === S.font)) { S.font = 'system'; apply(); }
+  updateFontFaces();
+  if (fontManager.classList.contains('open')) renderFontList();
+}
+window.onFontOperation = (success, message) => { refreshFonts(); say(message); };
+$('fontImport').onclick = () => {
+  if (window.Android && window.Android.chooseFontFile) window.Android.chooseFontFile();
+};
+$('fontDownload').onclick = () => {
+  const url = $('fontUrl').value.trim();
+  if (!url) return say('Enter a direct font-file URL');
+  if (window.Android && window.Android.addFontFromUrl) {
+    window.Android.addFontFromUrl(url); $('fontUrl').value = ''; say('Downloading font…');
+  }
+};
+$('fontClose').onclick = closeFontManager;
+fontManager.addEventListener('click', e => { if (e.target === fontManager) closeFontManager(); });
+updateFontFaces();
+
+const WALLS = [['Misty hills', 'w1.jpg'], ['Warm blur', 'w2.jpg'], ['River landscape', 'w3.jpg'], ['Quiet lake', 'w4.jpg']];
+let paintedWall = -2;
+function nextWall() { S.wall = S.wall >= WALLS.length - 1 ? -1 : S.wall + 1; apply(); say('Wallpaper: ' + (S.wall >= 0 ? WALLS[S.wall][0] : 'None')); }
+function apply() {
+  if (paintedWall !== S.wall) { paintedWall = S.wall; const w = WALLS[S.wall]; hasWall = !!w; wall.classList.toggle('empty', !w); wall.style.backgroundImage = w ? 'var(--scrim),url(' + w[1] + ')' : ''; }
+  root.style.setProperty('--blur', CONFIG.blur[S.blur][1] + 'px');
+  root.style.setProperty('--glass', 'rgba(18,26,30,' + CONFIG.glass[S.glass][1] + ')');
+  root.style.setProperty('--dim-wall', CONFIG.dim[S.dim][1]);
+  root.style.setProperty('--app-font', fontFamily(S.font));
+  root.dataset.motion = mode();
+  dock.classList.toggle('mode-icons', S.labels === 1);
+  dock.classList.toggle('mode-names', S.labels === 2);
+  const v = { wall:S.wall >= 0 ? WALLS[S.wall][0] : 'None', dim:CONFIG.dim[S.dim][0],
+    home:S.home.length + ' of 7', labels:['Icons and names','Icons','Names'][S.labels], blur:CONFIG.blur[S.blur][0], glass:CONFIG.glass[S.glass][0], fonts:S.font === 'system' ? 'System' : (fontList.find(f => f.id === S.font) || {}).name || 'System', motion:CONFIG.motion[mode()], clock:S.hour12 ? '12-hour' : '24-hour' };
+  panel.querySelectorAll('.row').forEach(r => r.lastChild.textContent = v[r.dataset.k]);
+  tick();
+  try { localStorage.setItem('fl-settings', JSON.stringify(S)); } catch (e) {}
+}
+function setWall(url) {
+  hasWall = !!url;
+  wall.classList.toggle('empty', !url);
+  wall.style.backgroundImage = url ? 'var(--scrim),url(' + url + ')' : '';
+  apply();
+}
+$('bWall').onclick = nextWall;
+$('bGrid').onclick = () => { S.labels = (S.labels + 1) % 3; apply(); };
+$('bSet').onclick = () => panel.classList.toggle('open');
+panel.querySelectorAll('.row').forEach(r => r.onclick = () => {
+  const k = r.dataset.k;
+  if (k === 'home') return openDrawer('pick');
+  if (k === 'fonts') return openFontManager();
+  if (k === 'wall') return nextWall();
+  if (k === 'dim') S.dim = (S.dim + 1) % CONFIG.dim.length;
+  if (k === 'labels') S.labels = (S.labels + 1) % 3;
+  if (k === 'blur') S.blur = (S.blur + 1) % CONFIG.blur.length;
+  if (k === 'glass') S.glass = (S.glass + 1) % CONFIG.glass.length;
+  if (k === 'motion') S.motion = (S.motion + 1) % 3;
+  if (k === 'clock') S.hour12 = !S.hour12;
+  apply();
+});
+
+function say(m) { toast.textContent = m; toast.classList.add('show'); clearTimeout(tt); tt = setTimeout(() => toast.classList.remove('show'), 2000); }
+let lastL = 0;
+function launch(a) {
+  if (Date.now() - lastL < 700) return; lastL = Date.now();
+  if (window.Android && window.Android.launch) { window.Android.launch(a.pkg); return; }
+  say('Preview: would open ' + a.name);
+}
+let cT = '', cD = '', cN = -1;
+function tick() {
+  const d = new Date(), h = d.getHours();
+  const t = d.toLocaleTimeString([], { hour:'numeric', minute:'2-digit', hour12:S.hour12 });
+  if (t !== cT) $('clock').textContent = cT = t;
+  const dd = d.toLocaleDateString([], { weekday:'short', day:'numeric', month:'short' });
+  if (dd !== cD) $('date').textContent = cD = dd;
+  if (S.home.length !== cN) $('count').textContent = (cN = S.home.length) + ' on home';
+  const g = h < 12 ? 'Good morning.' : h < 18 ? 'Good afternoon.' : 'Good evening.'; if ($('hero').dataset.g !== g) { $('hero').dataset.g = g; $('hero').innerHTML = g + '<br><b>What are we watching?</b>'; }
+}
+(function minuteLoop() { tick(); setTimeout(minuteLoop, 60000 - Date.now() % 60000 + 50); })();
+
+/* Remote and keyboard */
+const items = z => [...document.querySelectorAll('[data-zone="' + z + '"] > :not(.lens)')];
+addEventListener('keydown', e => {
+  const cur = document.activeElement, z = zoneOf(cur), k = e.key;
+  if (fontManager.classList.contains('open')) {
+    if (k === 'Escape' || k === 'Backspace') { closeFontManager(); e.preventDefault(); }
+    return;
+  }
+  if (drawer.classList.contains('open')) return drawerKeys(e);
+  if (k === 't' || k === 'T') { root.dataset.theme = root.dataset.theme === 'light' ? 'dark' : 'light'; return; }
+  if (!z) { apps()[0].focus({ preventScroll:true }); return; }
+  const list = items(z), i = list.indexOf(cur);
+  const go = el => { if (el) { el.focus({ preventScroll:true }); e.preventDefault(); } };
+  if (z === 'dock') {
+    if (k === 'ArrowRight') go(list[i + 1]);
+    else if (k === 'ArrowLeft') go(list[i - 1]);
+    else if (k === 'ArrowUp') go($('bGrid'));
+    else if (k === 'Enter') { cur.click(); e.preventDefault(); }
+  } else if (z === 'top') {
+    if (k === 'ArrowRight') go(list[i + 1]);
+    else if (k === 'ArrowLeft') go(list[i - 1]);
+    else if (k === 'ArrowDown') go(panel.classList.contains('open') && cur.id === 'bSet' ? list_first() : (apps()[lastDock] || apps()[0]));
+  } else if (z === 'panel') {
+    if (k === 'ArrowDown') go(list[i + 1]);
+    else if (k === 'ArrowUp') go(list[i - 1] || $('bSet'));
+  }
+  if (k === 'Escape' || k === 'Backspace') {
+    if (panel.classList.contains('open')) { panel.classList.remove('open'); $('bSet').focus({ preventScroll:true }); }
+    else (apps()[lastDock] || apps()[0]).focus({ preventScroll:true });
+  }
+});
+const list_first = () => panel.querySelector('.row');
+
+apply();
+renderDock();
+window.goHome = () => { if (drawer.classList.contains('open')) closeDrawer(); panel.classList.remove('open'); const f = apps()[0]; if (f) f.focus({ preventScroll:true }); };
+apps()[0].focus({ preventScroll:true });
+</script>
+</body>
+</html>
